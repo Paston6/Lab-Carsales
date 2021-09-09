@@ -14,7 +14,7 @@ path = "/Users/xingxing/Desktop/"
 
 
 # make the url to fetch data
-def get_url(brand = None, model = None, state = None, bodystyle = None, price_min = '3000', price_max = '150000', sort = None):
+def get_url(brand = None, model = None, state = None, bodystyle = None, price_min = None, price_max = None, sort = None):
 
     # initiate url
     search_url = car_sales_url
@@ -29,7 +29,8 @@ def get_url(brand = None, model = None, state = None, bodystyle = None, price_mi
     if bodystyle != None:
         search_url = search_url + bodystyle + '-bodystyle/'
     # default price range = 0 - 800000
-    search_url = search_url + "between-" + price_min + "-" + price_max + '/'
+    if (price_min != None and price_max != None):
+        search_url = search_url + "between-" + price_min + "-" + price_max + '/'
 
     # Show searching url
     print("Searching url: " + search_url)
@@ -59,7 +60,6 @@ def clean_data(car_json):
 
     #fetch every records
     for cars in car_json['mainEntity']['itemListElement']:
-        car_id = str(cars['position'])
         url = cars['item']['url']
         description = cars['item']['name']
         brand = cars['item']['brand']['name']
@@ -69,8 +69,7 @@ def clean_data(car_json):
         engine = cars['item']['vehicleEngine']['engineDisplacement']['value']
         price = cars['item']['offers']['price']
         # append to the result
-        result.append([car_id, url, description, brand, model, bodytype, km, engine, price])
-        print("Result_list: Id = " + car_id + " append success......")
+        result.append([url, description, brand, model, bodytype, km, engine, price])
 
     return result
 
@@ -83,32 +82,57 @@ def save_as_csv(cars):
     print("Datetime: Current time = " + time)
     
     pd_data = pd.DataFrame(cars, columns = ['ID', 'URL','DESC', 'BRAND', 'MODEL', 'TYPE', 'KM', 'ENGINE', 'PRICE'])
+    #pd_data = pd.DataFrame(cars, columns = ['ID','DESC', 'MODEL', 'KM', 'ENGINE', 'PRICE'])
     pd_data.to_csv(path+"carsales_data_"+time+".csv", index = False, encoding='utf-8', na_rep='MISSING')
-
 
     return None
 
-    
+
+# get n pages data
+def get_n_pages(url, n):
+    # ============parameters============
+    # brand = None, # model = None, 
+    # state = None, # bodystyle = None, 
+    # price_min = '3000', # price_max = '150000', 
+    # sort = None, # page = None
+    # ============parameters============
+
+    data = []
+    id = 0
+
+    for i in range(0,n+1):
+        if i == 0:
+            response = requests.get(url, headers=headers)
+        else:
+            response = requests.get(url+ "?offset="+str(i*12), headers=headers)
+
+        if (response.status_code == 200):
+            print("Requests: request success......")
+            car_json = extract_html(response.text)
+        else:
+            print("Requests: request fail......")
+            return False
+
+        offset_data = clean_data(car_json)
+
+        for j in offset_data:
+            data.append([id] + j)
+            id = id + 1
+
+        print("offset = "+str(i) + " append success")
+
+    return data
+
+
 # Main funtion
 if __name__ == "__main__":
     # print start working
     print("Script: Start working: ........")
 
     #Build searching url
-    url = get_url(brand = "bmw", model = "4-series", state = "new-south-wales",price_min = '3000', price_max = '30000')
+    url = get_url(brand = 'mercedes-benz', bodystyle = "suv", price_min = '10000', price_max = '150000')
+    print(url)
+    data = get_n_pages(url, 80)
 
-    # get responce with cheap request
-    response = requests.get(url, headers=headers)
-
-    # check response valid
-    if (response.status_code == 200):
-        print("Requests: request success......")
-        car_json = extract_html(response.text)
-    else:
-        print("Requests: request fail......")
-
-    cars = clean_data(car_json)
-    save_as_csv(cars)
-
-#https://www.carsales.com.au/cars/bmw/4-series/new-south-wales-state/between-3000-40000/
+    save_as_csv(data)
 
